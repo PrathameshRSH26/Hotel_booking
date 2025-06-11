@@ -11,7 +11,8 @@ const clerkWebhooks = async (req, res) => {
             "svix-signature": req.headers["svix-signature"]
         };
 
-        const evt = whook.verify(JSON.stringify(req.body), headers);
+        // ✅ Use raw body, not JSON.stringify
+        const evt = whook.verify(req.body, headers);
         const { data, type } = evt;
 
         const userData = {
@@ -31,14 +32,12 @@ const clerkWebhooks = async (req, res) => {
             case "user.deleted":
                 await User.findByIdAndDelete(data.id);
                 break;
-            default:
-                break;
         }
 
         res.json({ success: true, message: "Webhook received" });
     } catch (error) {
         console.log(error.message);
-        res.json({success: false, message: error.message})
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
