@@ -1,16 +1,14 @@
 import mongoose from "mongoose";
 
-const connectDB = async () => {
-  try {
-    mongoose.connection.on("connected", () =>
-      console.log("Database connected")
-    );
+const userSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
+  username: { type: String, required: true },
+  email: { type: String, required: true },
+  image: { type: String, required: true },
+  role: { type: String, enum: ["user", "hotelOwner"], default: "user" },
+  recentSearchCities: [{ type: String }]
+}, { timestamps: true });
 
-    await mongoose.connect(`${process.env.MONGODB_URI}/hotel-booking`);
-  } catch (error) {
-    console.error("Error connecting to database:", error);
-  }
-};
-
-export default connectDB;
+const User = mongoose.model("User", userSchema);
+export default User;
 
