@@ -1,49 +1,58 @@
-import User from "../models/User.js";
-import { Webhook } from "svix";
+import User from '../models/User.js';
+import { Webhook } from 'svix';
 
 const clerkWebhooks = async (req, res, next) => {
   try {
-    if (!req.headers['svix-id'] || !req.headers['svix-signature']) {
-      console.warn('⚠️ Missing Svix headers');
-      return res.status(400).json({ error: 'Missing webhook headers' });
+    // Verify webhook signature
+    const payload = req.body;
+    const headers = {
+      'svix-id': req.headers['svix-id'],
+      'svix-timestamp': req.headers['svix-timestamp'],
+      'svix-signature': req.headers['svix-signature']
+    };
+
+    if (!headers['svix-id'] || !headers['svix-signature']) {
+      return res.status(400).json({ 
+        error: 'Missing required webhook headers' 
+      });
     }
 
     const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
-    const payload = JSON.stringify(req.body);
-    const headers = {
-      "svix-id": req.headers["svix-id"],
-      "svix-timestamp": req.headers["svix-timestamp"],
-      "svix-signature": req.headers["svix-signature"]
-    };
+    const event = wh.verify(JSON.stringify(payload), headers);
 
-    const event = wh.verify(payload, headers);
     const { data, type } = event;
-
+    
+    // Prepare user data
     const userData = {
       _id: data.id,
       email: data.email_addresses?.find(e => e.id === data.primary_email_address_id)?.email_address,
       username: data.username || `${data.first_name || ''} ${data.last_name || ''}`.trim(),
-      image: data.image_url || data.profile_image_url
+      image: data.image_url || data.profile_image_url || '',
+      role: data.public_metadata?.role || 'user'
     };
 
+    // Process event type
     switch (type) {
-      case "user.created":
+      case 'user.created':
         await User.create(userData);
         break;
-      case "user.updated":
-        await User.findByIdAndUpdate(data.id, userData, { upsert: true, new: true });
+      case 'user.updated':
+        await User.findByIdAndUpdate(data.id, userData, { 
+          upsert: true,
+          new: true 
+        });
         break;
-      case "user.deleted":
+      case 'user.deleted':
         await User.findByIdAndDelete(data.id);
         break;
       default:
-        console.log(`🔔 Unhandled event type: ${type}`);
+        console.log(`Received unhandled event type: ${type}`);
     }
 
-    res.status(200).json({ success: true });
+    return res.status(200).json({ success: true });
 
   } catch (error) {
-    console.error('⚠️ Webhook processing failed:', error);
+    console.error('Webhook processing error:', error);
     next(error);
   }
 };
